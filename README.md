@@ -23,7 +23,7 @@ pip install -r requirements.txt
 
 ## 💿 데이터셋
 
-- **⬇️데이터셋 다운로드 링크**: `{https://drive.google.com/drive/folders/12Su3WGS5lo-6WHcWo0tjl5TvWEGsU3je}`
+- [**⬇️데이터셋 다운로드 링크**](https://drive.google.com/drive/folders/12Su3WGS5lo-6WHcWo0tjl5TvWEGsU3je)
 
 ## 🔍 파일 구조
 

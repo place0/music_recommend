@@ -85,7 +85,7 @@ def extract_multiple_image_embeddings(image_paths):
 def get_image_filenames_for_title(title, image_folder):
     filenames = []
     for filename in os.listdir(image_folder):
-        if filename.startswith(title) and filename.endswith(('.jpg', '.png')):
+        if str(filename).startswith(str(title)) and filename.endswith(('.jpg', '.png')):
             filenames.append(os.path.join(image_folder, filename))
     return filenames
 
@@ -132,13 +132,16 @@ if multimodal_embeddings is None:
     save_embeddings(multimodal_embeddings_file, multimodal_embeddings)
 
 # 추천 시스템: 텍스트 입력 + 선택된 음악의 이미지
-def recommend_song_with_text_and_image(user_input, selected_music_title, df, multimodal_embeddings):
+def recommend_song_with_text_and_image(user_input, selected_music_title, df, multimodal_embeddings, df_expanded):
     # 선택된 음악 제목이 데이터프레임에 있는지 확인
     if selected_music_title not in df['title'].values:
         raise ValueError(f"선택한 음악 제목 '{selected_music_title}'이 데이터베이스에 없습니다. 다시 입력해주세요.")
 
-    # 선택된 음악의 인덱스
-    selected_index = df[df['title'] == selected_music_title].index[0]
+    # 원본 df에서 선택된 음악의 인덱스
+    selected_index_in_df = df[df['title'] == selected_music_title].index[0]
+
+    # df_expanded에서의 해당 인덱스를 찾기
+    selected_index_in_expanded_df = df_expanded[df_expanded['title'] == selected_music_title].index[0]
 
     # 선택된 음악의 이미지 임베딩 생성
     image_folder = './images'
@@ -158,7 +161,7 @@ def recommend_song_with_text_and_image(user_input, selected_music_title, df, mul
     similarities = cosine_similarity([user_multimodal_embedding], multimodal_embeddings)[0]
 
     # 선택된 음악 제외
-    similarities[selected_index] = -1  # 자기 자신 제거
+    similarities[selected_index_in_df] = -1  # 자기 자신 제거
 
     # 가장 유사한 음악 찾기
     most_similar_index = np.argmax(similarities)
@@ -168,6 +171,7 @@ def recommend_song_with_text_and_image(user_input, selected_music_title, df, mul
     return most_similar_title, most_similar_score
 
 # 사용자 입력 처리
+# 사용자 입력 처리
 print("랜덤으로 선택된 음악 제목 중에서 하나를 선택하세요:")
 random_choices = df.sample(5)
 print(random_choices[['title']])
@@ -176,10 +180,11 @@ user_input = input("새해 소원을 입력해주세요: ")
 
 # 추천 결과
 recommended_title, similarity_score = recommend_song_with_text_and_image(
-    user_input, selected_music, df_expanded, multimodal_embeddings
+    user_input, selected_music, df, multimodal_embeddings, df_expanded
 )
 
 print(f"추천된 음악 제목: {recommended_title} (유사도: {similarity_score:.4f})")
+
 
 # 평가 함수 (Top-k 정확도 및 카테고리별 성능 분석 포함)
 def evaluate_recommendation_system_top_k(df, multimodal_embeddings, k=5, num_samples=100):
@@ -198,9 +203,19 @@ def evaluate_recommendation_system_top_k(df, multimodal_embeddings, k=5, num_sam
         user_input = random_row['lyrics'][:50]
 
         # 추천 결과 (Top-k)
-        selected_index = df[df['title'] == selected_music_title].index[0]
+        selected_index_in_expanded_df = df_expanded[df_expanded['title'] == selected_music_title].index[0]
+
+        # 원본 데이터프레임의 인덱스로 변환
+        selected_index_in_original_df = selected_index_in_expanded_df // 3  # 3개 이미지마다 반복됨
+
+        # 선택된 음악의 멀티모달 임베딩 생성
         user_text_embedding = get_bert_embedding(preprocess_text(user_input)).flatten()
-        user_multimodal_embedding = np.hstack((user_text_embedding, multimodal_embeddings[selected_index][-128:]))
+
+        # 선택된 인덱스를 기반으로 multimodal_embeddings에서 데이터 가져오기
+        selected_embedding = multimodal_embeddings[selected_index_in_original_df]
+
+        # 텍스트 임베딩과 이미지 임베딩 결합
+        user_multimodal_embedding = np.hstack((user_text_embedding, selected_embedding[-128:]))
 
         # 유사도 계산
         similarities = cosine_similarity([user_multimodal_embedding], multimodal_embeddings)[0]
@@ -236,6 +251,7 @@ def evaluate_recommendation_system_top_k(df, multimodal_embeddings, k=5, num_sam
         print(f"  {category}: {acc:.4f}")
 
     return top_k_accuracy, category_accuracy
+
 
 # 시스템 평가 실행
 evaluate_recommendation_system_top_k(df_expanded, multimodal_embeddings, k=5, num_samples=100)
